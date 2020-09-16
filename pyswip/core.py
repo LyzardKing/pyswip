@@ -138,8 +138,13 @@ def _findSwiplFromExec():
                 path = os.path.join(rtvars['PLBASE'], 'lib', rtvars['PLARCH'])
                 baseName = os.path.join(path, dllName)
 
+                sharedPath = os.path.dirname(rtvars['PLBASE'])
+                sharedBaseName = os.path.join(sharedPath, dllName)
+
                 if os.path.exists(baseName):
                     fullName = baseName
+                elif os.path.exists(sharedBaseName):
+                    fullName = sharedBaseName
                 else:  # We will search for versions
                     pattern = baseName + '.*'
                     files = glob.glob(pattern)
