@@ -24,6 +24,7 @@
 
 from __future__ import print_function
 
+from contextlib import contextmanager
 import os
 import sys
 import glob
@@ -802,6 +803,7 @@ argc = len(sys.argv)
 # typedef uintptr_t       foreign_t;      /* return type of foreign functions */
 # typedef wchar_t         pl_wchar_t;     /* Prolog wide character */
 # typedef foreign_t       (*pl_function_t)(); /* foreign language functions */
+# typedef uintptr_t       buf_mark_t;     /* buffer mark handle */
 
 atom_t = c_uint_p
 functor_t = c_uint_p
@@ -820,6 +822,7 @@ pl_wchar_t = c_wchar
 intptr_t = c_long
 ssize_t = intptr_t
 wint_t = c_uint
+buf_mark_t = c_uint_p
 
 PL_initialise = _lib.PL_initialise
 PL_initialise = check_strings(None, 1)(PL_initialise)
@@ -827,6 +830,20 @@ PL_initialise = check_strings(None, 1)(PL_initialise)
 
 #unsigned int PL_version(int key)
 
+PL_mark_string_buffers = _lib.PL_mark_string_buffers
+PL_mark_string_buffers.argtypes = [buf_mark_t]
+
+PL_release_string_buffers_from_mark = _lib.PL_release_string_buffers_from_mark
+PL_release_string_buffers_from_mark.argtypes = [buf_mark_t]
+
+@contextmanager
+def PL_STRINGS_MARK():
+    __PL_mark = buf_mark_t()
+    PL_mark_string_buffers(byref(__PL_mark))
+    try:
+        yield
+    finally:
+        PL_release_string_buffers_from_mark(__PL_mark)
 
 PL_open_foreign_frame = _lib.PL_open_foreign_frame
 PL_open_foreign_frame.restype = fid_t
@@ -1060,9 +1077,21 @@ PL_unify_list = _lib.PL_unify_list
 PL_unify_list.argtypes = [term_t, term_t, term_t]
 PL_unify_list.restype = c_int
 
+PL_unify_nil = _lib.PL_unify_nil
+PL_unify_nil.argtypes = [term_t]
+PL_unify_nil.restype = c_int
+
+PL_unify_atom = _lib.PL_unify_atom
+PL_unify_atom.argtypes = [term_t, atom_t]
+PL_unify_atom.restype = c_int
+
 PL_unify_atom_chars = _lib.PL_unify_atom_chars
 PL_unify_atom_chars.argtypes = [term_t, c_char_p]
 PL_unify_atom_chars.restype = c_int
+
+PL_unify_string_chars = _lib.PL_unify_string_chars
+PL_unify_string_chars.argtypes = [term_t, c_char_p]
+PL_unify_string_chars.restype = c_void_p
 
 PL_foreign_control = _lib.PL_foreign_control
 PL_foreign_control.argtypes = [control_t]

@@ -23,7 +23,16 @@
 # SOFTWARE.
 
 
+import sys
+
 from pyswip.core import *
+
+
+# For backwards compability with Python 2 64bit
+if sys.version_info < (3,):
+    integer_types = (int, long,)
+else:
+    integer_types = (int,)
 
 
 class InvalidTypeError(TypeError):
@@ -67,7 +76,7 @@ class Atom(object):
 
         if isinstance(term, Term):
             term = term.handle
-        elif not isinstance(term, (c_void_p, int)):
+        elif not isinstance(term, (c_void_p, integer_types)):
             raise ArgumentTypeError((str(Term), str(c_void_p)), str(type(term)))
 
         a = atom_t()
@@ -164,8 +173,20 @@ class Variable(object):
             self.chars = self.chars.decode()
 
     def unify(self, value):
-        if isstr(value):
-            fun = PL_unify_atom_chars
+        if self.handle is None:
+            t = PL_new_term_ref(self.handle)
+        else:
+            t = PL_copy_term_ref(self.handle)
+
+        self._fun(value, t)
+        self.handle = t
+
+    def _fun(self, value, t):
+        if type(value) == Atom:
+            fun = PL_unify_atom
+            value = value.handle
+        elif isstr(value):
+            fun = PL_unify_string_chars
             value = value.encode()
         elif type(value) == int:
             fun = PL_unify_integer
@@ -179,26 +200,17 @@ class Variable(object):
             raise TypeError('Cannot unify {} with value {} due to the value unknown type {}'.
                             format(self, value, type(value)))
 
-        if self.handle is None:
-            t = PL_new_term_ref(self.handle)
-        else:
-            t = PL_copy_term_ref(self.handle)
-
         if type(value) == list:
             a = PL_new_term_ref(self.handle)
-            if type(value[0]) == int:
-                element_fun = PL_unify_integer
-            elif type(value[0]) == float:
-                element_fun = PL_unify_float
-            else:
-                raise
-            if value:
-                for element in value:
-                    fun(t, a, t)
-                    element_fun(a, element)
+            list_term = t
+            for element in value:
+                tail_term = PL_new_term_ref(self.handle)
+                fun(list_term, a, tail_term)
+                self._fun(element, a)
+                list_term = tail_term
+            PL_unify_nil(list_term)
         else:
             fun(t, value)
-        self.handle = t
 
     def get_value(self):
         return getTerm(self.handle)
@@ -266,7 +278,7 @@ class Functor(object):
 
         if isinstance(term, Term):
             term = term.handle
-        elif not isinstance(term, (c_void_p, int)):
+        elif not isinstance(term, (c_void_p, integer_types)):
             raise ArgumentTypeError((str(Term), str(int)), str(type(term)))
 
         f = functor_t()
@@ -417,24 +429,25 @@ def getString(t):
         raise InvalidTypeError("string")
 
 
-mappedTerms = {}
+# mappedTerms = {}
 def getTerm(t):
     if t is None:
         return None
-    global mappedTerms
+    # global mappedTerms
     #print 'mappedTerms', mappedTerms
 
     #if t in mappedTerms:
     #    return mappedTerms[t]
-    p = PL_term_type(t)
-    if p < PL_TERM:
-        res = _getterm_router[p](t)
-    elif PL_is_list(t):
-        res = getList(t)
-    else:
-        res = getFunctor(t)
-    mappedTerms[t] = res
-    return res
+    with PL_STRINGS_MARK():
+        p = PL_term_type(t)
+        if p < PL_TERM:
+            res = _getterm_router[p](t)
+        elif PL_is_list(t):
+            res = getList(t)
+        else:
+            res = getFunctor(t)
+        # mappedTerms[t] = res
+        return res
 
 
 def getList(x):
